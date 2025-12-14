@@ -4,6 +4,9 @@
 # Build output
 dist/
 
+# Generated at build time
+**/generated_version.ts
+
 # SpecStory/CHOP transcripts (keep zz-chop-logs if needed)
 .specstory/**
 .aider*
