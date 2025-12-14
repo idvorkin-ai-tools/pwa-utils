@@ -33,7 +33,11 @@ export function createEnvironmentMetadata(
 		devicePixelRatio: deviceService.getDevicePixelRatio(),
 		online: deviceService.isOnline(),
 		timestamp: new Date().toISOString(),
-		url: typeof window !== "undefined" ? window.location.href : "unknown",
+		// Sanitize URL to prevent leaking sensitive query params (tokens, session IDs)
+		url:
+			typeof window !== "undefined"
+				? `${window.location.origin}${window.location.pathname}`
+				: "unknown",
 	};
 }
 
@@ -91,7 +95,11 @@ export function createScreenshotCapture(): ScreenshotCapture {
 				// Create video element to capture frame
 				const video = document.createElement("video");
 				video.srcObject = stream;
-				await video.play();
+				// Wait for metadata to load before accessing dimensions
+				await new Promise<void>((resolve) => {
+					video.onloadedmetadata = () => resolve();
+					video.play();
+				});
 
 				// Draw frame to canvas
 				const canvas = document.createElement("canvas");
@@ -121,8 +129,15 @@ export function createScreenshotCapture(): ScreenshotCapture {
 	};
 }
 
+// Max URL length to avoid browser limits (conservative estimate)
+const MAX_URL_LENGTH = 8000;
+
 /**
  * Build a GitHub issue URL for a bug report
+ *
+ * Note: Screenshots as data URLs are NOT embedded in the URL due to length limits.
+ * Data URLs can be hundreds of KB which exceeds browser URL limits (~2000-8000 chars).
+ * Screenshots should be uploaded separately and linked, or pasted manually.
  */
 export function buildGitHubIssueUrl(
 	repository: string,
@@ -140,13 +155,28 @@ export function buildGitHubIssueUrl(
 		body += "\n```";
 	}
 
-	if (data.screenshot) {
+	// Note: Data URL screenshots are intentionally NOT embedded because they
+	// exceed URL length limits. Users should paste screenshots manually or
+	// upload to an image host and include the link in the description.
+	if (data.screenshot && !data.screenshot.startsWith("data:")) {
+		// Only embed if it's a regular URL (not a data URL)
 		body += "\n\n**Screenshot:**\n";
 		body += `![Screenshot](${data.screenshot})`;
+	} else if (data.screenshot) {
+		body += "\n\n**Screenshot:** _(paste from clipboard or upload separately)_";
 	}
 
 	const encodedBody = encodeURIComponent(body);
-	return `https://github.com/${repository}/issues/new?title=${title}&body=${encodedBody}`;
+	const url = `https://github.com/${repository}/issues/new?title=${title}&body=${encodedBody}`;
+
+	// Warn if URL is approaching limits
+	if (url.length > MAX_URL_LENGTH) {
+		console.warn(
+			`Bug report URL length (${url.length}) exceeds recommended limit. Some content may be truncated.`,
+		);
+	}
+
+	return url;
 }
 
 /**

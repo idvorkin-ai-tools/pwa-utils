@@ -6,6 +6,8 @@ repos:
       - id: biome-check
         name: Biome Lint & Format
         additional_dependencies: ["@biomejs/biome@1.9.4"]
+        # Note: Using beta pre-commit hook with stable biome package.
+        # The pre-commit hook repo doesn't have stable releases yet.
 
   # ✨ Prettier: Only for Markdown and HTML
   - repo: https://github.com/pre-commit/mirrors-prettier
